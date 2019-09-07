@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>Scatterplot Chart</title>
+
+		<script src="https://d3js.org/d3.v4.min.js"></script>  <!-- link to D3 Version 4 library -->
+	</head>
+
+	<body>
+		<script>
+		    d3.csv('cleanest_sample.csv', function(dataset) {    	
+		     	dataset = dataset.map(function(d) {
+		     		var parseDate = d3.timeParse("%Y-%m-%d");
+		     		var formatDay = d3.timeFormat("%e");
+		     		var formatMonth = d3.timeFormat("%m");
+
+		     		d.date = d.date;
+				    d.carrier = d.carrier;
+				    d.dep_delay = +d.dep_delay;
+				    return{
+				    	day: +formatDay(parseDate(d.date)),
+				    	month: +formatMonth(parseDate(d.date)),
+				    	dep_delay: d.dep_delay
+				    }
+				}); 
+
+				dataset = dataset.filter(function(d) {
+					if (d.dep_delay <= 720 && d.dep_delay >= -120){
+						return{
+					    	day: d.day,
+					    	month: d.month,
+					    	dep_delay: d.dep_delay
+				   		}	
+					}
+				}); 
+
+				createChart(dataset);
+
+			});
+			
+			function createChart(dataset){
+
+				const chart_width = 800;
+		        const chart_height = 700;
+		        const reduced_height = 200;
+		        const padding = 25;
+
+		        // Create Main Container
+				var main_cont = d3.select("body").append("svg")
+												 .attr("id", "main_cont")
+												 .attr("width", chart_width)
+												 .attr("height", chart_height)
+												 .style("margin", "2.5%");
+
+				var option = d3.local();
+		    	option.set(main_cont, 1);
+
+				// Create Main Container's Labels
+				title_1 = "Departure Delays for every Day of Month";
+				title_1_calc = (chart_width - (2 * 0.025 * chart_width)) / 2;
+				createLabels( "main_cont", title_1, title_1_calc, 0.04 * chart_height, "25px", "0" );
+
+				title_2 = "Days of Month";
+				title_2_calc = (chart_width - (2 * 0.025 * chart_width)) / 2;
+				createLabels( "main_cont", title_2, title_2_calc, chart_height - 0.025 * chart_height, "15px", "0" );
+
+				title_3 = "Departure Delays (Minutes)";
+				title_3_calc = (chart_height - (2 * 0.025 * chart_height)) / 2;
+				createLabels( "main_cont", title_3, -title_3_calc, 0.05 * chart_width, "15px", "-90" );
+
+				// Append the remaining charts containers
+				main_cont.append("g").attr("id", "preview_g");
+
+				d3.select("#preview_g").append("svg").attr("id", "svg1");
+				d3.select("#preview_g").append("svg").attr("id", "svg2");
+				d3.select("#preview_g").append("svg").attr("id", "svg3");
+
+				// Create Axis Scales
+				var xScale = d3.scalePoint().domain(d3.range(1,32)).range([60,660]).padding(4);
+				var xAxis = d3.axisBottom().scale(xScale);
+
+				var yScale = d3.scaleLinear().domain([-120,720]).range([175,0]);
+				var yAxis = d3.axisLeft().scale(yScale);
+
+				// Create remaining charts
+				createIncludedchart( dataset, "svg1", chart_width, reduced_height, 0, yAxis, xAxis, "October", "oct", 10, 20 );
+				createIncludedchart( dataset, "svg2", chart_width, reduced_height, reduced_height, yAxis, xAxis, "November", "nov", 11, 20 );
+				createIncludedchart( dataset, "svg3", chart_width, reduced_height, 2*reduced_height, yAxis, xAxis, "December", "dec", 12, 20 );
+
+				// Resample Dataset to reduce size for better D3 handling
+				function sampleDataset( data, month_select, temp ){
+
+					var dataset = data.filter(function(d) {
+						if( (Math.random() * 100) < temp){
+							return d.month === month_select; 
+						}
+					}); 
+
+					return dataset;
+				}
+
+				// Actually create the labels
+				function createLabels( svg_sel, text_msg, x_val, y_val, f_size, deg_val ){
+					d3.select("#" + svg_sel).append("text")
+											.text(text_msg)	
+											.attr("x", x_val)
+											.attr("y", y_val)
+											.attr("text-anchor", "middle")
+											.attr("transform", "rotate(" + deg_val + ")")
+											.attr("font-family", "Arial")
+											.attr("font-size", f_size)
+											.attr("fill", "black");	
+
+				}
+
+				// Actually create the charts
+				function createIncludedchart( data, chart_id, width, r_height, y_position, yAxis, xAxis, month_name, month_id, month_num, barrier ){
+					var dataset = sampleDataset( data,  month_num, barrier); 
+
+					d3.select("#" + chart_id).attr("width", width)
+											 .attr("height", r_height)
+											 .attr("x", 2*padding)
+											 .attr("y", y_position + 2*padding);
+					d3.select("#" + chart_id).append("g").attr("id", "g" + chart_id);
+
+					yScale.range([r_height - padding, 0]);
+					yAxis.scale(yScale);
+					d3.select("#g" + chart_id).append("g")
+											  .attr("class", "yAxis")
+											  .attr("transform", "translate(50, 0)")
+											  .call(yAxis);
+					d3.select("#g" + chart_id).append("g")
+											  .attr("class", "xAxis")
+											  .attr("transform", "translate(0, 175)")
+											  .call(xAxis);
+
+					// Insert the data points
+					d3.select("#g" + chart_id).selectAll("dot")
+							           .data(dataset)
+							           .enter()
+								            .append("circle")
+								            .attr("r", 2.5)
+								            .attr("cx", function(d) {return xScale(d.day);})
+								            .attr("cy", function(d) {return yScale(d.dep_delay);})
+								            .attr('fill', function(d) { 
+									          	if (d.dep_delay < 0) {return "rgb(252,230,64)";} 
+									          	else {return "rgb(68,17,82)";} 
+									        })
+		  								    .style("opacity", "0.8");
+
+		  			// Create the "buttons" for detailed/preview mode
+					d3.select("#g" + chart_id).append("text").text(month_name)
+					   .attr("id", chart_id + month_id)
+					   .attr("transform", "rotate(90)")
+					   .attr("x", "85").attr("y", "-700")
+					   .attr("text-anchor", "middle")
+					   .attr("font-family", "Arial")
+					   .attr("font-size", "30px")
+					   .attr("fill", "black")
+					   .on("mouseover", function(){
+							d3.select("#" + chart_id + month_id).text("Click for more")
+		  						.attr("font-size", "20px")
+		  						.on("click", function(){
+		  							if (this.id.length == 7){var temp_id = this.id.slice(0, 4);} 
+
+		  							if ( option.get(main_cont) == 1 ){
+		  							
+		  								if(temp_id == "svg1"){temp_id_2 = "svg2";	temp_id_3 = "svg3";} 
+		  								else if (temp_id  == "svg2"){temp_id_2 = "svg1";	temp_id_3 = "svg3";} 
+		  								else if (temp_id  == "svg3"){temp_id_2 = "svg1";	temp_id_3 = "svg2";}
+
+			  						 	yScale.range([550,0]);
+										yAxis.scale(yScale);
+
+										d3.select("#g" + temp_id).call(yAxis);
+										d3.select("#g" + temp_id).select(".xAxis").attr("transform", "translate(0, 550)").call(xAxis);
+
+		  						 		d3.select("#g" + temp_id).selectAll("circle").attr("cy", function(d) {return yScale(d.dep_delay);});
+
+		  						 		d3.select("#" + temp_id).transition().attr("height", "700").attr("y", 75);
+		  								d3.select("#" + this.id).attr("x", "250");
+
+		  								d3.select("#" + temp_id_2).transition().attr("width", "0").attr("height", "0");
+										d3.select("#" + temp_id_3).transition().attr("width", "0").attr("height", "0");
+
+		  						 		option.set(main_cont, 0);
+
+		  						 	} else if ( option.get(main_cont) == 0 ){
+
+		  						 		if(temp_id == "svg1"){temp_id_2 = "svg2";	temp_id_3 = "svg3"; temp_y = 0;} 
+		  								else if (temp_id  == "svg2"){temp_id_2 = "svg1";	temp_id_3 = "svg3"; temp_y = 200;} 
+		  								else if (temp_id  == "svg3"){temp_id_2 = "svg1";	temp_id_3 = "svg2"; temp_y = 400;}
+
+	  									yScale.range([175,0]);
+										yAxis.scale(yScale);
+
+										d3.select("#g" + temp_id).call(yAxis);
+										d3.select("#g" + temp_id).select(".xAxis").attr("transform", "translate(0, 175)").call(xAxis);
+
+										d3.select("#g" + temp_id).selectAll("circle").attr("cy", function(d) {return yScale(d.dep_delay);});
+
+	  									d3.select("#" + temp_id).transition().attr("height", "225").attr("y", temp_y + 50);
+	  									d3.select("#" + this.id).attr("x", "85");
+
+										d3.select("#" + temp_id_2).transition().attr("width", width).attr("height", "225");
+										d3.select("#" + temp_id_3).transition().attr("width", width).attr("height", "225");
+
+										option.set(main_cont, 1);
+		  						 	}
+		  						});
+						})
+						.on("mouseout", function () {
+					        d3.select("#" + chart_id + month_id).text(month_name).attr("font-size", "30px");
+					    });
+				}
+			};
+
+		</script>
+
+	</body>
+</html>

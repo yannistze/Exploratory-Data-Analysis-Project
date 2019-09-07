@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>Boxplot Chart</title>
+
+		<script src="https://d3js.org/d3.v4.min.js"></script>  <!-- link to D3 Version 4 library -->
+	</head>
+
+	<body>
+		<script>
+		    d3.csv('cleanest_sample.csv', function(dataset) {    	
+		     	dataset = dataset.map(function(d) {
+				    d.carrier = d.carrier;
+				    d.dep_delay = +d.dep_delay;
+				    return{
+				    	carrier: d.carrier,
+				    	dep_delay: d.dep_delay
+				    }
+				}); 
+
+				dataset = dataset.filter(function(d) {
+					if (d.dep_delay <= 720 && d.dep_delay >= -120){
+						return{
+					    	carrier: d.carrier,
+					    	dep_delay: d.dep_delay
+				   		}	
+					}
+				}); 
+
+				createBoxplot(dataset);
+
+			});
+
+		    // Divide the dataset by carrier
+			function divideDataset( carrier_select, data ){
+
+				var dataset = data.filter(function(d) {
+					return d.carrier === carrier_select; 
+				}); 
+
+				return dataset;
+			}
+
+			// Actually create the labels
+			function createLabels( svg_sel, text_msg, x_val, y_val, f_size, deg_val ){
+				d3.select("#" + svg_sel).append("text")
+										.text(text_msg)	
+										.attr("text-anchor", "middle")
+										.attr("x", x_val)
+										.attr("y", y_val)
+										.attr("transform", "rotate(" + deg_val + ")")
+										.attr("font-family", "Arial")
+										.attr("font-size", f_size)
+										.attr("fill", "black");	
+			}
+
+			
+			function createBoxplot(dataset){
+				const box_width = 1000;
+		        const box_height = 800;
+		        const colors_vals = ["#3366cc", "#dc3912", "#ff9900", "#109618", "#990099", 
+		        					 "#0099c6", "#dd4477", "#66aa00", "#b82e2e", "#316395", 
+		        					 "#994499", "#22aa99", "#aaaa11", "#6633cc", "#e67300", 
+		        					 "#8b0707", "#651067", "#329262", "#5574a6", "#3b3eac"];
+
+				// Produce the Unique Carriers ID
+				var carriers = dataset.map(function(d) { return d.carrier });
+				carriers = d3.set(carriers).values();
+
+				// Divide data by airline | sort each  part of array | create statistics
+				var data = [];				
+				d3.map(carriers).each(function(d){ data.push(divideDataset( d, dataset));});
+				data.forEach( function(d){ d.sort(function(x, y){return d3.ascending(x.dep_delay, y.dep_delay)}) });
+				var statistics = [];
+				data.forEach( function(d){ 
+					var results = {};
+
+					overall_size = d.length;
+
+					early = d.filter( function(data) { if( data.dep_delay <= 0 ){return data } });
+					early = early.reverse();
+					early = early.map(function(d) { return Math.abs(d.dep_delay) });
+					early_size = early.length;
+
+					delay = d.filter( function(data) { if( data.dep_delay > 0 ){return data} });
+					delay = delay.map(function(d) { return d.dep_delay });
+					delay_size = delay.length;
+				
+					min_e = early[0];	max_e = early[early.length - 1];
+
+					min_d = delay[0];	max_d = delay[delay.length - 1];
+
+					q1_e = d3.quantile(early, 0.25);	q2_e = d3.quantile(early, 0.50);	q3_e = d3.quantile(early, 0.75);
+
+					q1_d = d3.quantile(delay, 0.25);	q2_d = d3.quantile(delay, 0.50);	q3_d = d3.quantile(delay, 0.75);
+
+					iqr_e = q3_e - q1_e; 	iqr_d = q3_d - q1_d;
+
+					r0_e = Math.max(min_e, q1_e - iqr_e * 1.5);	r1_e = Math.min(max_e, q3_e + iqr_e * 1.5);
+
+					r0_d = Math.max(min_d, q1_d - iqr_d * 1.5);	r1_d = Math.min(max_d, q3_d + iqr_d * 1.5);
+
+					outliers_e = early.filter(function(data) { if( data < r0_e || data > r1_e ){ return data } }); 
+					outliers_d = delay.filter(function(data) { if( data < r0_d || data > r1_d ){ return data } });
+
+					results.carrier = d[0].carrier;
+					results.overall_size = overall_size;
+					results.early_size = early_size;
+					results.delay_size = delay_size;
+					results.q1_e = q1_e;	results.q2_e = q2_e;	results.q3_e = q3_e;
+					results.q1_d = q1_d;	results.q2_d = q2_d;	results.q3_d = q3_d;
+					results.r0_e = r0_e;	results.r1_e = r1_e;
+					results.r0_d = r0_d;	results.r1_d = r1_d;
+					results.outliers_e = outliers_e; results.outliers_d = outliers_d;
+					results.median_e = d3.median(early);	results.median_d = d3.median(delay);
+
+					statistics.push(results);
+				});
+
+				var xAxis_interval = [];
+				statistics.forEach( function(d){
+					xAxis_interval.push((d.delay_size + d.early_size)/dataset.length);
+				});
+
+
+				d3.select("body").append("svg")
+								 .attr("id", "main_cont")
+								 .attr("width", box_width)
+								 .attr("height", box_height)
+								 .attr("x", "50")
+								 .attr("y", "50")
+								 .style("margin", "2.5%");
+
+				// Create Main Container's Labels
+				title_1 = "Departure Delay for each Airline";
+				title_1_calc = (box_width - (2 * 0.025 * box_width)) / 2;
+				createLabels( "main_cont", title_1, title_1_calc, 0.04 * box_height, "25px", "0" );
+
+				title_2 = "Airlines in US";
+				title_2_calc = (box_width - (2 * 0.025 * box_width)) / 2;
+				createLabels( "main_cont", title_2, title_2_calc, box_height - 0.05 * box_height, "15px", "0" );
+
+				title_3 = "Departure Delay (Minutes)";
+				title_3_calc = (box_height - (2 * 0.025 * box_height)) / 2;
+				createLabels( "main_cont", title_3, -title_3_calc, 0.05 * box_width, "15px", "-90" );
+
+				title_4 = "Click on Boxplots for More";
+				title_4_calc = (box_height - (2 * 0.025 * box_height)) / 2;
+				createLabels( "main_cont", title_4, title_4_calc, -(box_width - (0.05 * box_width)), "15px", "90" );
+
+
+				// Create Axis Scales
+				var xScale = d3.scalePoint().domain(carriers).range([125,900]);
+				var xAxis = d3.axisBottom().scale(xScale);
+
+				var yScale = d3.scaleLinear().domain([-120,720]).range([700,100]);
+				var yAxis = d3.axisLeft().scale(yScale);
+
+				d3.select("#main_cont").append("g")
+									   .attr("class", "yAxis")
+									   .attr("transform", "translate(100, 0)")
+									   .call(yAxis);	
+				d3.select("#main_cont").append("g")
+									   .attr("class", "xAxis")
+									   .attr("transform", "translate(0, 700)")
+									   .call(xAxis);			
+
+
+				statistics.forEach( function(data){
+					d3.select("#main_cont").append("g").attr("id", "g" + data.carrier);
+					outliers = data.outliers_d;
+
+					d3.select("#g" + data.carrier).append("line")
+								.attr("id", data.carrier)
+								.attr("x1", xScale(data.carrier))
+								.attr("y1", yScale(data.q1_d))
+								.attr("x2", xScale(data.carrier))
+								.attr("y2", yScale(data.q3_d))
+								.attr("stroke", colors_vals.pop())
+								.attr("stroke-width", ((data.delay_size + data.early_size)/dataset.length)*325)
+								.on("click", function(){
+		  						 	d3.select("#main_cont").transition()
+		  						 						   .attr("width", "0")
+		  						 						   .attr("height", "0");
+		  						 	createSingleBox(statistics, box_width, box_height, this.id);
+		  						});
+
+					d3.select("#g" + data.carrier).append("line")
+								.attr("id", data.carrier)
+								.attr("x1", xScale(data.carrier))
+								.attr("y1", yScale(data.median_d-1))
+								.attr("x2", xScale(data.carrier))
+								.attr("y2", yScale(data.median_d+1))
+								.attr("stroke", "black")
+								.attr("stroke-width", ((data.delay_size + data.early_size)/dataset.length)*325)
+								.on("click", function(){
+									d3.select("#main_cont").transition()
+														   .attr("width", "0")
+														   .attr("height", "0");
+								});
+
+					d3.select("#g" + data.carrier).append("line")
+												  .attr("x1", xScale(data.carrier))
+												  .attr("y1", yScale(data.r0_d))
+												  .attr("x2", xScale(data.carrier))
+												  .attr("y2", yScale(data.q1_d))
+												  .attr("stroke", "black");
+
+					d3.select("#g" + data.carrier).append("line")
+												  .attr("x1", xScale(data.carrier))
+												  .attr("y1", yScale(data.r1_d))
+												  .attr("x2", xScale(data.carrier))
+												  .attr("y2", yScale(data.q3_d))
+												  .attr("stroke", "black");
+
+					d3.select("#g" + data.carrier).selectAll("dot")
+									           .data(outliers)
+									           .enter()
+										            .append("circle")
+										            .attr("r", 2)
+										            .attr("cx", xScale(data.carrier))
+										            .attr("cy", function(d) {return yScale(d);})
+										            .attr('fill', "red")
+				  								    .style("opacity", "0.5");
+
+				});
+				
+			}
+
+			function createSingleBox(stats, width, height, box_id){
+				data = stats.filter( function(d){ return d.carrier === box_id } );
+
+				d3.select("body").append("svg")
+								 .style("margin", "2.5%")
+								 .attr("id", "detailed_cont")
+								 .attr("width", width)
+								 .attr("height", height)
+								 .attr("x", "50")
+								 .attr("y", "50");
+
+				// Create Main Container's Labels
+				title_1 = "Departure Delay for '" + box_id + "'";
+				title_1_calc = (width - (2 * 0.025 * width)) / 2;
+				createLabels( "detailed_cont", title_1, title_1_calc, 0.04 * height, "25px", "0" );
+
+				title_2 = "Departure";
+				title_2_calc = (width - (2 * 0.025 * width)) / 2;
+				createLabels( "detailed_cont", title_2, title_2_calc, height - 0.05 * height, "15px", "0" );
+
+				title_3 = "Departure Delay (Minutes)";
+				title_3_calc = (height - (2 * 0.025 * height)) / 2;
+				createLabels( "detailed_cont", title_3, -title_3_calc, 0.05 * width, "15px", "-90" );
+
+				title_4 = "Click again on Boxplots to go back";
+				title_4_calc = (height - (2 * 0.025 * height)) / 2;
+				createLabels( "detailed_cont", title_4, title_4_calc, -(width - (0.05 * width)), "15px", "90" );
+
+				// Create Axis Scales
+				var xScale = d3.scaleLinear().domain([-120,720]).range([125,900]);
+				var xAxis = d3.axisBottom().scale(xScale);
+
+				var yScale = d3.scalePoint().domain(["Early", "Late"]).range([700,100]).padding([0.7]);
+				var yAxis = d3.axisLeft().scale(yScale);
+
+				d3.select("#detailed_cont").append("g")
+										   .attr("class", "yAxis")
+										   .attr("transform", "translate(100, 0)")
+										   .call(yAxis);	
+				d3.select("#detailed_cont").append("g")
+										   .attr("class", "xAxis")
+										   .attr("transform", "translate(0, 700)")
+										   .call(xAxis);	
+
+
+				d3.select("#detailed_cont").append("g").attr("id", "g1" + box_id);
+
+				d3.select("#g1" + box_id).append("line")
+							.attr("y1", yScale("Late"))
+							.attr("x1", xScale(data[0].q1_d))
+							.attr("y2", yScale("Late"))
+							.attr("x2", xScale(data[0].q3_d))
+							.attr("stroke", "red")
+							.attr("stroke-width", (data[0].delay_size/data[0].overall_size)*300)
+							.on("click", function(){
+	  						 	d3.selectAll("#detailed_cont").transition().remove();
+	  						 	d3.select("#main_cont").transition().attr("width", width).attr("height", height);
+	  						});
+
+				d3.select("#g1" + box_id).append("line")
+							.attr("y1", yScale("Late"))
+							.attr("x1", xScale(data[0].median_d-1))
+							.attr("y2", yScale("Late"))
+							.attr("x2", xScale(data[0].median_d+1))
+							.attr("stroke", "black")
+							.attr("stroke-width", (data[0].delay_size/data[0].overall_size)*300)
+							.on("click", function(){
+	  						 	d3.selectAll("#detailed_cont").transition().remove();
+	  						 	d3.select("#main_cont").transition().attr("width", width).attr("height", height);
+	  						});
+
+				d3.select("#g1" + box_id).append("line")
+										.attr("y1", yScale("Late")).attr("x1", xScale(data[0].r0_d))
+										.attr("y2", yScale("Late")).attr("x2", xScale(data[0].q1_d))
+										.attr("stroke", "black");
+
+				d3.select("#g1" + box_id).append("line")
+										.attr("y1", yScale("Late")).attr("x1", xScale(data[0].r1_d))
+										.attr("y2", yScale("Late")).attr("x2", xScale(data[0].q3_d))
+										.attr("stroke", "black");
+
+				d3.select("#g1" + box_id).selectAll("dot")
+								           .data(data[0].outliers_d)
+								           .enter()
+									            .append("circle")
+									            .attr("r", 2)
+									            .attr("cx", function(d) {return xScale(d);})
+									            .attr("cy", yScale("Late"))
+									            .attr('fill', "red")
+			  								    .style("opacity", "0.8");
+
+			  	d3.select("#detailed_cont").append("g").attr("id", "g2" + box_id);
+
+				d3.select("#g2" + box_id).append("line")
+							.attr("y1", yScale("Early"))
+							.attr("x1", xScale(data[0].q1_e))
+							.attr("y2", yScale("Early"))
+							.attr("x2", xScale(data[0].q3_e))
+							.attr("stroke", "lightgreen")
+							.attr("stroke-width", (data[0].early_size/data[0].overall_size)*300)
+							.on("click", function(){
+	  						 	d3.selectAll("#detailed_cont").transition().remove();
+	  						 	d3.select("#main_cont").transition().attr("width", width).attr("height", height);
+	  						});
+
+				d3.select("#g2" + box_id).append("line")
+							.attr("y1", yScale("Early"))
+							.attr("x1", xScale(data[0].median_e-1))
+							.attr("y2", yScale("Early"))
+							.attr("x2", xScale(data[0].median_e+1))
+							.attr("stroke", "black")
+							.attr("stroke-width", (data[0].early_size/data[0].overall_size)*300)
+							.on("click", function(){
+	  						 	d3.selectAll("#detailed_cont").transition().remove();
+	  						 	d3.select("#main_cont").transition().attr("width", width).attr("height", height);
+	  						});
+
+				d3.select("#g2" + box_id).append("line")
+										.attr("y1", yScale("Early"))
+										.attr("x1", xScale(data[0].r0_e))
+										.attr("y2", yScale("Early"))
+										.attr("x2", xScale(data[0].q1_e))
+										.attr("stroke", "black");
+
+				d3.select("#g2" + box_id).append("line")
+										.attr("y1", yScale("Early"))
+										.attr("x1", xScale(data[0].r1_e))
+										.attr("y2", yScale("Early"))
+										.attr("x2", xScale(data[0].q3_e))
+										.attr("stroke", "black");
+
+				d3.select("#g2" + box_id).selectAll("dot")
+								           .data(data[0].outliers_e)
+								           .enter()
+									            .append("circle")
+									            .attr("r", 2)
+									            .attr("cx", function(d) {return xScale(d);})
+									            .attr("cy", yScale("Early"))
+									            .attr('fill', "lightgreen")
+			  								    .style("opacity", "0.8");
+
+
+			}
+
+		</script>
+
+	</body>
+
+</html>
