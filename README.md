@@ -1,4 +1,4 @@
-# Exploratory-Data-Analysis-Project
+# Exploratory Data Analysis Project
 
 "Analysis of Flight Delays based on Data extracted from the United States Department of Transportation"
 
